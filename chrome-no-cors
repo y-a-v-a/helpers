@@ -1,0 +1,17 @@
+#!/bin/bash
+# Development tool to launch Chrome with CORS disabled for localhost testing
+# Used for debugging cross-domain requests during development
+echo "Starting a new Chrome without web security (CORS)"
+
+# NR=$(jot -r 1)
+# open -n -a  /Applications/Google\ Chrome.app  --args --user-data-dir="/tmp/user-data-dir-$NR" --disable-web-security
+#open -n -a  /Applications/Google\ Chrome.app  --args --user-data-dir="/tmp/user-data-dir-1" --disable-web-security
+
+open -n -a /Applications/Google\ Chrome.app --args \
+  --user-data-dir="/tmp/user-data-dir-1" \
+  --disable-web-security \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-features=TranslateUI,SignIn \
+  --disable-sync \
+  --auto-open-devtools-for-tabs%
