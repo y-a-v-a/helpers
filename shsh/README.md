@@ -28,19 +28,30 @@ From the `shsh/` directory:
 npm install
 ```
 
+To make `shsh` available on your PATH during development:
+
+```sh
+npm link
+```
+
+Alternatively, install it globally from this folder:
+
+```sh
+npm install -g .
+```
+
 ### Usage
 
-From the directory you want the command to run in:
+After linking (or after installing this package globally), run from the directory you want the command to execute in:
 
 ```sh
 export ANTHROPIC_API_KEY="..."
-node /path/to/helpers/shsh/shsh.js "describe what you want to do"
+shsh "describe what you want to do"
 ```
 
-Or, if you mark it executable:
+You can also run it without linking by calling the script directly:
 
 ```sh
-chmod +x /path/to/helpers/shsh/shsh.js
 /path/to/helpers/shsh/shsh.js "describe what you want to do"
 ```
 

@@ -1,4 +1,18 @@
 {
+  "name": "shsh",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Natural-language to shell command generator/executor (Anthropic)",
+  "author": {"name": "Vincent Bruijn", "email": "vebruijn@gmail.com"},
+  "license": "MIT",
+  "files": [
+    "README.md",
+    "package.json",
+    "shsh.js"
+  ],
+  "bin": {
+    "shsh": "./shsh.js"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1"
   }
