@@ -13,14 +13,54 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+function summarizeStdin(stdinData) {
+  const SMALL_THRESHOLD = 5 * 1024;   // 5KB - send full
+  const MEDIUM_THRESHOLD = 50 * 1024; // 50KB - smart sample
+
+  if (stdinData.length <= SMALL_THRESHOLD) {
+    return stdinData; // Send full data for small inputs
+  }
+
+  const lines = stdinData.split('\n');
+  const lineCount = lines.length;
+
+  if (stdinData.length <= MEDIUM_THRESHOLD) {
+    // Medium size: show head + tail
+    const headLines = 30;
+    const tailLines = 30;
+    const omitted = lineCount - headLines - tailLines;
+
+    if (omitted <= 0) {
+      return stdinData; // Not enough lines to summarize
+    }
+
+    return lines.slice(0, headLines).join('\n') +
+           `\n\n... (${omitted} lines omitted) ...\n\n` +
+           lines.slice(-tailLines).join('\n');
+  }
+
+  // Large data: aggressive summary with metadata
+  const sampleSize = 15;
+  return `[Stdin contains ${lineCount} lines, ${(stdinData.length / 1024).toFixed(1)}KB]
+
+First ${sampleSize} lines:
+${lines.slice(0, sampleSize).join('\n')}
+
+Last ${sampleSize} lines:
+${lines.slice(-sampleSize).join('\n')}
+
+[Provide a command that processes all ${lineCount} lines from stdin]`;
+}
+
 function buildSystemPrompt(stdinData = null) {
   let prompt = `You are a shell command generator for ${os.platform()} systems.
 Generate only the shell command needed to accomplish the user's request.`;
 
   if (stdinData) {
+    const summarized = summarizeStdin(stdinData);
     prompt += `\n\nThe user has piped the following data as input:
 ---
-${stdinData}
+${summarized}
 ---
 
 Generate a command that works with this piped data.`;
