@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const readline = require('readline');
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 
 const RETRY_ADDITION = "\nThe previous command suggestion didn't work or wasn't what I needed. Please provide an alternative approach.";
 
@@ -132,8 +133,220 @@ function determineMode(isPiped, flags) {
   return 'interactive';
 }
 
+function detectShell() {
+  const shell = process.env.SHELL || '';
+  if (shell.includes('zsh')) return 'zsh';
+  if (shell.includes('bash')) return 'bash';
+  return 'zsh';  // Default to zsh
+}
+
+function generateShellIntegration(shell) {
+  if (shell === 'zsh') {
+    return `# shsh shell integration for zsh
+# Add this to your ~/.zshrc: eval "$(shsh --init zsh)"
+
+shsh() {
+    # Pass through special flags directly to real shsh
+    if [[ "$1" == "--init" || "$1" == "--print" || "$1" == "-p" ]]; then
+        command shsh "$@"
+        return $?
+    fi
+
+    # Check for --yes/-y flag for auto-execution
+    local auto_execute=false
+    local args=()
+    for arg in "$@"; do
+        if [[ "$arg" == "--yes" || "$arg" == "-y" ]]; then
+            auto_execute=true
+        else
+            args+=("$arg")
+        fi
+    done
+
+    local result
+    result=$(command shsh --print "\${args[@]}" 2>&1)
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 || -z "$result" ]]; then
+        # Print error/output as-is
+        echo "$result"
+        return $exit_code
+    fi
+
+    # Auto-execute or prompt for confirmation
+    if [[ "$auto_execute" == true ]]; then
+        # Show generated command
+        echo "Generated command:"
+        echo "$result"
+        echo
+        # Add to history
+        print -s "$result"
+        # Execute in current shell context
+        eval "$result"
+    else
+        # Interactive mode with retry support
+        while true; do
+            # Show generated command
+            echo "Generated command:"
+            echo "$result"
+            echo
+
+            # Prompt for confirmation
+            echo -n "Execute? (y/n/r): "
+            read -r answer
+
+            if [[ "$answer" =~ ^[Yy]$ ]]; then
+                echo
+                # Add to history
+                print -s "$result"
+                # Execute in current shell context
+                eval "$result"
+                break
+            elif [[ "$answer" =~ ^[Rr]$ ]]; then
+                # Retry - regenerate command
+                echo
+                result=$(command shsh --print "\${args[@]}" 2>&1)
+                exit_code=$?
+                if [[ $exit_code -ne 0 || -z "$result" ]]; then
+                    echo "$result"
+                    return $exit_code
+                fi
+                continue
+            else
+                echo "Aborted."
+                return 1
+            fi
+        done
+    fi
+}`;
+  } else if (shell === 'bash') {
+    return `# shsh shell integration for bash
+# Add this to your ~/.bashrc: eval "$(shsh --init bash)"
+
+shsh() {
+    # Pass through special flags directly to real shsh
+    if [[ "$1" == "--init" || "$1" == "--print" || "$1" == "-p" ]]; then
+        command shsh "$@"
+        return $?
+    fi
+
+    # Check for --yes/-y flag for auto-execution
+    local auto_execute=false
+    local args=()
+    for arg in "$@"; do
+        if [[ "$arg" == "--yes" || "$arg" == "-y" ]]; then
+            auto_execute=true
+        else
+            args+=("$arg")
+        fi
+    done
+
+    local result
+    result=$(command shsh --print "\${args[@]}" 2>&1)
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 || -z "$result" ]]; then
+        # Print error/output as-is
+        echo "$result"
+        return $exit_code
+    fi
+
+    # Auto-execute or prompt for confirmation
+    if [[ "$auto_execute" == true ]]; then
+        # Show generated command
+        echo "Generated command:"
+        echo "$result"
+        echo
+        # Add to history
+        history -s "$result"
+        # Execute in current shell context
+        eval "$result"
+    else
+        # Interactive mode with retry support
+        while true; do
+            # Show generated command
+            echo "Generated command:"
+            echo "$result"
+            echo
+
+            # Prompt for confirmation
+            echo -n "Execute? (y/n/r): "
+            read -r answer
+
+            if [[ "$answer" =~ ^[Yy]$ ]]; then
+                echo
+                # Add to history
+                history -s "$result"
+                # Execute in current shell context
+                eval "$result"
+                break
+            elif [[ "$answer" =~ ^[Rr]$ ]]; then
+                # Retry - regenerate command
+                echo
+                result=$(command shsh --print "\${args[@]}" 2>&1)
+                exit_code=$?
+                if [[ $exit_code -ne 0 || -z "$result" ]]; then
+                    echo "$result"
+                    return $exit_code
+                fi
+                continue
+            else
+                echo "Aborted."
+                return 1
+            fi
+        done
+    fi
+}`;
+  } else {
+    throw new Error(`Unsupported shell: ${shell}. Use 'zsh' or 'bash'.`);
+  }
+}
+
+function showIntegrationTip() {
+  const configDir = path.join(os.homedir(), '.config', 'shsh');
+  const configFile = path.join(configDir, 'config.json');
+
+  // Check if tip already shown
+  let config = {};
+  try {
+    config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+  } catch (err) {
+    // File doesn't exist yet
+  }
+
+  if (!config.tipShown) {
+    const shell = detectShell();
+    const rcFile = shell === 'zsh' ? '~/.zshrc' : '~/.bashrc';
+
+    console.log(`\n💡 Tip: Add shsh commands to your shell history automatically!`);
+    console.log(`   Add this to your ${rcFile}:\n`);
+    console.log(`   eval "$(shsh --init ${shell})"\n`);
+
+    // Save config
+    try {
+      fs.mkdirSync(configDir, { recursive: true });
+      config.tipShown = true;
+      fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+    } catch (err) {
+      // Silently fail if can't write config
+    }
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
+
+  // Handle --init command early
+  if (args[0] === '--init') {
+    const shell = args[1] || detectShell();
+    try {
+      console.log(generateShellIntegration(shell));
+      process.exit(0);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  }
 
   // Parse flags
   const flags = {
@@ -160,8 +373,18 @@ async function main() {
     console.error('Usage: shsh [options] "<natural language description>"');
     console.error('');
     console.error('Options:');
-    console.error('  --yes, -y     Auto-execute without confirmation');
-    console.error('  --print, -p   Print command only, do not execute');
+    console.error('  --yes, -y       Auto-execute without confirmation');
+    console.error('  --print, -p     Print command only, do not execute');
+    console.error('  --init <shell>  Output shell integration code for bash/zsh');
+    console.error('');
+    console.error('Shell Integration:');
+    console.error('  Add shsh commands to your history automatically:');
+    console.error('');
+    console.error('  # For Zsh (add to ~/.zshrc)');
+    console.error('  eval "$(shsh --init zsh)"');
+    console.error('');
+    console.error('  # For Bash (add to ~/.bashrc)');
+    console.error('  eval "$(shsh --init bash)"');
     console.error('');
     console.error('Examples:');
     console.error('  shsh "find all jpeg images"');
@@ -188,6 +411,7 @@ async function main() {
         if (answer === 'y' || answer === 'yes') {
           console.log('');
           await executeCommand(command, stdinData);
+          showIntegrationTip();
           break;
         } else if (answer === 'r' || answer === 'retry') {
           currentRequest = userRequest;
