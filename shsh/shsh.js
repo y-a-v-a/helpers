@@ -9,9 +9,7 @@ const fs = require('fs');
 
 const RETRY_ADDITION = "\nThe previous command suggestion didn't work or wasn't what I needed. Please provide an alternative approach.";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+let client = null;
 
 function summarizeStdin(stdinData) {
   const SMALL_THRESHOLD = 5 * 1024;   // 5KB - send full
@@ -72,7 +70,40 @@ The command will be executed in: ${process.cwd()}`;
   return prompt;
 }
 
+function getApiKey() {
+  const configDir = path.join(os.homedir(), '.config', 'shsh');
+  const configFile = path.join(configDir, 'config.json');
+
+  // Try to read API key from config file first
+  try {
+    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    if (config.apiKey) {
+      return config.apiKey;
+    }
+  } catch (err) {
+    // Config file doesn't exist or is malformed, fall through to env var
+  }
+
+  // Fall back to environment variable
+  const envApiKey = process.env.ANTHROPIC_API_KEY;
+  if (envApiKey) {
+    return envApiKey;
+  }
+
+  // No API key found
+  throw new Error(
+    'No Anthropic API key found. Set ANTHROPIC_API_KEY environment variable or add "apiKey" to ~/.config/shsh/config.json'
+  );
+}
+
 async function generateCommand(userPrompt, stdinData = null, isRetry = false) {
+  // Lazy initialization of client
+  if (!client) {
+    client = new Anthropic({
+      apiKey: getApiKey(),
+    });
+  }
+
   const prompt = isRetry ? userPrompt + RETRY_ADDITION : userPrompt;
 
   const message = await client.messages.create({
