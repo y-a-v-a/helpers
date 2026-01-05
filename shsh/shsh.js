@@ -464,17 +464,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Validate API key before making any API calls
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable is not set.');
-    console.error('');
-    console.error('To use shsh, you need to set your Anthropic API key:');
-    console.error('  export ANTHROPIC_API_KEY=your-api-key-here');
-    console.error('');
-    console.error('Get your API key from: https://console.anthropic.com/settings/keys');
-    process.exit(1);
-  }
-
   // Determine execution mode
   const mode = determineMode(isPiped, flags);
 
