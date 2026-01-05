@@ -545,6 +545,19 @@ busiest_periods() {
     esac
 }
 
+# Function 14: Most touched files
+most_touched_files() {
+    local limit=${1:-20}
+
+    print_header "Top $limit Most Modified Files"
+
+    local git_cmd=$(build_git_log_cmd)
+    eval "$git_cmd --name-only --format=''" | \
+    grep -v '^$' | \
+    sort | uniq -c | sort -rn | head -n "$limit" | \
+    awk '{printf "%s%-4d commits%s  %s\n", "'"${GREEN}"'", $1, "'"${NC}"'", substr($0, index($0,$2))}'
+}
+
 # Function 15: Find ticket by number
 find_ticket() {
     local number=$1
@@ -614,6 +627,9 @@ show_menu() {
     echo -e "${BOLD}Timeline Analysis:${NC}"
     echo -e "  ${GREEN}14)${NC} activity_timeline [period] - Overall activity over time (day/week/month/year)"
     echo -e "  ${GREEN}15)${NC} busiest_periods [period]   - Commit distribution (hour/day/week/month/year)"
+    echo -e ""
+    echo -e "${BOLD}File Analysis:${NC}"
+    echo -e "  ${GREEN}16)${NC} most_touched_files [limit] - Files modified most frequently"
     echo -e ""
     echo -e "${BOLD}Usage:${NC}"
     echo -e "  Run without arguments to see this menu"
